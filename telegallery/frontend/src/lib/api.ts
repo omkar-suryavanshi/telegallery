@@ -1,4 +1,22 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const TOKEN_STORAGE_KEY = "telegallery_token";
+
+// A plain cookie doesn't reliably work here: the frontend (Vercel) and backend (Render)
+// are on unrelated domains, and mobile Safari's Intelligent Tracking Prevention blocks
+// cross-domain cookies outright regardless of SameSite/Secure settings. Storing the
+// token ourselves and sending it explicitly works identically in every browser.
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+export function setStoredToken(token: string) {
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredToken() {
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
 
 class ApiClientError extends Error {
   constructor(public status: number, message: string) {
@@ -7,13 +25,15 @@ class ApiClientError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getStoredToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    credentials: "include",
+    credentials: "include", // kept as a fallback for same-site/local dev
     headers: {
       ...(options.body && !(options.body instanceof FormData)
         ? { "Content-Type": "application/json" }
         : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
@@ -32,19 +52,38 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
+/** Appends the auth token as a query param — for use in <img src>/<a href> URLs, which
+ * cannot send custom headers the way fetch()/XHR can. */
+function withTokenParam(url: string): string {
+  const token = getStoredToken();
+  if (!token) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
+}
+
 export const api = {
   auth: {
     login: (phone: string) => request<{ loginToken: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ phone }),
     }),
-    verify: (payload: { loginToken: string; code?: string; password?: string }) =>
-      request<{ success?: true; requires2FA?: true; loginToken?: string; user?: { id: string; phone: string } }>(
-        "/auth/verify",
-        { method: "POST", body: JSON.stringify(payload) }
-      ),
+    verify: async (payload: { loginToken: string; code?: string; password?: string }) => {
+      const result = await request<{
+        success?: true;
+        requires2FA?: true;
+        loginToken?: string;
+        token?: string;
+        user?: { id: string; phone: string };
+      }>("/auth/verify", { method: "POST", body: JSON.stringify(payload) });
+      if (result.success && result.token) setStoredToken(result.token);
+      return result;
+    },
     me: () => request<{ user: { id: string; phone: string } }>("/auth/me"),
-    logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
+    logout: async () => {
+      const result = await request<{ success: true }>("/auth/logout", { method: "POST" });
+      clearStoredToken();
+      return result;
+    },
   },
   files: {
     list: (params: Record<string, string | number | boolean | undefined> = {}) => {
@@ -64,6 +103,8 @@ export const api = {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${API_BASE}/files/upload`);
         xhr.withCredentials = true;
+        const token = getStoredToken();
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
         };
@@ -80,8 +121,8 @@ export const api = {
     restore: (id: string) => request<{ file: FileItem }>(`/files/${id}/restore`, { method: "POST" }),
     deletePermanent: (id: string, purgeTelegram = false) =>
       request<{ success: true }>(`/files/${id}/permanent?purgeTelegram=${purgeTelegram}`, { method: "DELETE" }),
-    downloadUrl: (id: string) => `${API_BASE}/files/${id}/download`,
-    thumbnailUrl: (id: string) => `${API_BASE}/files/${id}/thumbnail`,
+    downloadUrl: (id: string) => withTokenParam(`${API_BASE}/files/${id}/download`),
+    thumbnailUrl: (id: string) => withTokenParam(`${API_BASE}/files/${id}/thumbnail`),
   },
   albums: {
     list: () => request<{ albums: Album[] }>("/albums"),

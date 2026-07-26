@@ -3,7 +3,7 @@ import { body, validationResult } from "express-validator";
 import { PrismaClient } from "@prisma/client";
 import { asyncHandler, ApiError } from "../middleware/errorHandler";
 import { authLimiter } from "../middleware/rateLimiters";
-import { requireAuth, issueAuthCookie, clearAuthCookie } from "../middleware/requireAuth";
+import { requireAuth, signAuthToken, issueAuthCookie, clearAuthCookie } from "../middleware/requireAuth";
 import { encrypt } from "../utils/crypto";
 import {
   sendLoginCode,
@@ -83,8 +83,9 @@ router.post(
         },
       });
 
-      issueAuthCookie(res, user.id);
-      res.json({ success: true, user: { id: user.id, phone: user.phone } });
+      const token = signAuthToken(user.id);
+      issueAuthCookie(res, token);
+      res.json({ success: true, token, user: { id: user.id, phone: user.phone } });
     } finally {
       await client.disconnect().catch(() => {});
     }
