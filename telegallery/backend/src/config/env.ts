@@ -29,11 +29,12 @@ export const env = {
   // Comma-separated list of allowed frontend origins, e.g.:
   //   "http://localhost:3000,https://telegallery-black.vercel.app"
   // Supporting a list (not just one string) lets the same deployment serve both local
-  // development and production frontends, and makes it easy to add a preview-deployment
-  // URL later without needing code changes — just update this env var.
+  // development and production frontends. Split on commas OR newlines (some dashboard
+  // UIs silently insert a line break when a pasted value wraps visually) and strip any
+  // trailing slash, since an Origin header never includes one but a pasted URL might.
   CORS_ORIGINS: (process.env.CORS_ORIGIN ?? "http://localhost:3000")
-    .split(",")
-    .map((s) => s.trim())
+    .split(/[,\n]+/)
+    .map((s) => s.trim().replace(/\/+$/, ""))
     .filter(Boolean),
 
   UPLOAD_TMP_DIR: process.env.UPLOAD_TMP_DIR ?? "/tmp/telegallery-uploads",

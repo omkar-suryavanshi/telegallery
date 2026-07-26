@@ -36,10 +36,16 @@ app.use(
     origin(origin, callback) {
       // Same-origin requests (curl, server-to-server, Render's own health checks) don't
       // send an Origin header at all — always allow those through.
-      if (!origin || env.CORS_ORIGINS.includes(origin)) {
+      if (!origin) return callback(null, true);
+
+      const normalized = origin.trim().replace(/\/+$/, "");
+      if (env.CORS_ORIGINS.includes(normalized)) {
         callback(null, true);
       } else {
-        logger.warn(`Blocked CORS request from disallowed origin: ${origin}`);
+        logger.warn(
+          `Blocked CORS request — origin "${normalized}" is not in the allowed list: ` +
+            JSON.stringify(env.CORS_ORIGINS)
+        );
         callback(new Error("Not allowed by CORS"));
       }
     },
