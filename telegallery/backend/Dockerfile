@@ -6,8 +6,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
+# This package.json belongs to an npm workspaces monorepo — the lockfile lives only at
+# the repo root, not here, so `npm ci` (which requires an exact matching lockfile in
+# this same directory) isn't usable in this single-package Docker build context.
+# `npm install` resolves from package.json directly instead.
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -25,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma

@@ -2,8 +2,11 @@
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
 
+# This package.json belongs to an npm workspaces monorepo — the lockfile lives only at
+# the repo root, not here, so `npm ci` (which requires an exact matching lockfile in
+# this same directory) isn't usable in this single-package Docker build context.
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
