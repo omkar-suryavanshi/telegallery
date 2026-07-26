@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: telegallery-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides for the sqlite dev default when POSTGRES profile is used —
+      # harmless to leave here for sqlite too since it's ignored unless referenced.
+      DATABASE_URL: ${DATABASE_URL:-file:./data/dev.db}
+    volumes:
+      - backend_data:/app/data
+      - backend_uploads:/tmp/telegallery-uploads
+    networks:
+      - telegallery
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: telegallery-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    depends_on:
+      - backend
+    networks:
+      - telegallery
+
+  # Optional — switch backend's DATABASE_URL to point here for production use.
+  # Start with: docker compose --profile postgres up
+  postgres:
+    image: postgres:16-alpine
+    container_name: telegallery-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: telegallery
+      POSTGRES_PASSWORD: telegallery
+      POSTGRES_DB: telegallery
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - telegallery
+
+networks:
+  telegallery:
+    driver: bridge
+
+volumes:
+  backend_data:
+  backend_uploads:
+  postgres_data:

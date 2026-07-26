@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: 255 255 255;
+  --accent-color: #6366f1;
+}
+
+.dark {
+  --surface: 17 17 22;
+}
+
+html, body {
+  overflow-x: hidden;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 transition-colors duration-300;
+}
+
+.glass-panel {
+  @apply bg-white/70 dark:bg-neutral-900/60 backdrop-blur-glass border border-white/20 dark:border-white/10 shadow-lg;
+}
+
+.masonry-grid {
+  columns: 2;
+  column-gap: 0.75rem;
+}
+@screen sm {
+  .masonry-grid { columns: 3; }
+}
+@screen lg {
+  .masonry-grid { columns: 4; }
+}
+@screen xl {
+  .masonry-grid { columns: 5; }
+}
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 0.75rem;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { @apply bg-neutral-300 dark:bg-neutral-700 rounded-full; }

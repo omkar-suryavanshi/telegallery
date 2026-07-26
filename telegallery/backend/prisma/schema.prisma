@@ -1,0 +1,119 @@
+// TeleGallery database schema
+// Dev: SQLite (file). Prod: swap provider to "postgresql" and set DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // change to "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  phone         String   @unique
+  // AES-256-GCM encrypted GramJS StringSession — never store plaintext.
+  encryptedSession String
+  channelId     String? // Telegram private channel used as storage backend
+  channelAccessHash String? // required alongside channelId to reference the channel reliably (see channelService.ts)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  files    File[]
+  albums   Album[]
+  tags     Tag[]
+  settings Settings?
+}
+
+model Settings {
+  id                String  @id @default(uuid())
+  userId            String  @unique
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme             String  @default("system") // light | dark | system
+  accentColor       String  @default("#6366f1")
+  uploadQuality     Int     @default(90) // 1-100, used by sharp for compression
+  autoCompress      Boolean @default(true)
+  thumbnailMaxWidth Int     @default(500)
+}
+
+// File "kind" (photo/video/document/audio) is stored as a plain string, not a Prisma
+// enum — SQLite has no native enum type, and Prisma doesn't generate a runtime JS
+// object for enums on connectors that lack one. The allowed values are defined once in
+// backend/src/types/fileKind.ts and validated at the application layer.
+
+model File {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  originalName  String
+  mimeType      String
+  kind          String    // one of: PHOTO | VIDEO | DOCUMENT | AUDIO — see src/types/fileKind.ts
+  sizeBytes     Int
+  sha256        String    // for duplicate detection
+  width         Int?
+  height        Int?
+  durationMs    Int?
+
+  // Telegram references — the actual bytes live in the user's channel.
+  telegramMessageId Int
+  telegramChannelId String
+  thumbnailMessageId Int? // small compressed preview, also stored in-channel
+
+  isFavorite    Boolean   @default(false)
+  isTrashed     Boolean   @default(false)
+  trashedAt     DateTime?
+
+  uploadedAt    DateTime  @default(now())
+
+  tags       FileTag[]
+  albumLinks AlbumFile[]
+
+  @@index([userId, isTrashed])
+  @@index([userId, kind])
+  @@index([sha256])
+}
+
+model Album {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  coverFileId String?
+  createdAt DateTime    @default(now())
+
+  files AlbumFile[]
+
+  @@index([userId])
+}
+
+// Join table — albums are virtual, files are never duplicated in Telegram.
+model AlbumFile {
+  albumId String
+  fileId  String
+  album   Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  file    File  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  addedAt DateTime @default(now())
+
+  @@id([albumId, fileId])
+}
+
+model Tag {
+  id     String    @id @default(uuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  files  FileTag[]
+
+  @@unique([userId, name])
+}
+
+model FileTag {
+  fileId String
+  tagId  String
+  file   File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([fileId, tagId])
+}
