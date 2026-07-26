@@ -26,7 +26,15 @@ export const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN ?? "30d",
 
   COOKIE_NAME: process.env.COOKIE_NAME ?? "telegallery_session",
-  CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
+  // Comma-separated list of allowed frontend origins, e.g.:
+  //   "http://localhost:3000,https://telegallery-black.vercel.app"
+  // Supporting a list (not just one string) lets the same deployment serve both local
+  // development and production frontends, and makes it easy to add a preview-deployment
+  // URL later without needing code changes — just update this env var.
+  CORS_ORIGINS: (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
 
   UPLOAD_TMP_DIR: process.env.UPLOAD_TMP_DIR ?? "/tmp/telegallery-uploads",
   MAX_UPLOAD_SIZE_MB: parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "500", 10),
