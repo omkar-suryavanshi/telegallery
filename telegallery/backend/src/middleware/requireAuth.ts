@@ -36,7 +36,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 export function issueAuthCookie(res: Response, userId: string) {
-  const token = jwt.sign({ userId }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
+  // Newer @types/jsonwebtoken versions type `expiresIn` as a narrow template-literal
+  // type (e.g. "30d") rather than a plain `string`. Our value comes from an env var and
+  // is always a valid duration string at runtime, so a type cast here is safe.
+  const token = jwt.sign({ userId }, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
+  });
   res.cookie(env.COOKIE_NAME, token, {
     ...cookieOptions(),
     maxAge: 30 * 24 * 60 * 60 * 1000,
